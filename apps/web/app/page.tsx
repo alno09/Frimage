@@ -162,13 +162,22 @@ export default function Home() {
     }
   }
 
-  function handleDownload(url: string, format: string) {
+  async function handleDownload(url: string, format: string) {
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`Failed to download ${format.toUpperCase()} file`);
+    }
+
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url;
+    a.href = objectUrl;
     a.download = `converted-file.${format}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    URL.revokeObjectURL(objectUrl);
   }
 
   return (

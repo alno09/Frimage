@@ -32,7 +32,11 @@ app.use(cors({
 
 // Serve files from conversions directory
 app.use("/api/preview", express.static(conversionsDir));
-app.use("/api/download", express.static(conversionsDir));
+app.use("/api/download", express.static(conversionsDir, {
+  setHeaders(res, filePath) {
+    res.setHeader("Content-Disposition", `attachment; filename="${path.basename(filePath)}"`);
+  },
+}));
 
 const upload = multer({
   dest: uploadDir,
