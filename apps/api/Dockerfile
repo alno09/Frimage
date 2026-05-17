@@ -19,7 +19,19 @@ ENV NODE_ENV=production
 
 WORKDIR /app
 
-RUN mkdir -p /storage/uploads /storage/outputs && chown -R node:node /app /storage
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    imagemagick \
+    ghostscript \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN sed -i 's/domain="coder" rights="none" pattern="PDF"/domain="coder" rights="read|write" pattern="PDF"/' /etc/ImageMagick-6/policy.xml \
+    && sed -i 's/domain="coder" rights="none" pattern="PS"/domain="coder" rights="read|write" pattern="PS"/' /etc/ImageMagick-6/policy.xml \
+    && sed -i 's/domain="coder" rights="none" pattern="PS2"/domain="coder" rights="read|write" pattern="PS2"/' /etc/ImageMagick-6/policy.xml \
+    && sed -i 's/domain="coder" rights="none" pattern="PS3"/domain="coder" rights="read|write" pattern="PS3"/' /etc/ImageMagick-6/policy.xml \
+    && sed -i 's/domain="coder" rights="none" pattern="EPS"/domain="coder" rights="read|write" pattern="EPS"/' /etc/ImageMagick-6/policy.xml \
+    && sed -i 's/domain="coder" rights="none" pattern="AI"/domain="coder" rights="read|write" pattern="AI"/' /etc/ImageMagick-6/policy.xml
+
+RUN mkdir -p /storage/uploads /storage/conversions && chown -R node:node /app /storage
 
 COPY --from=builder --chown=node:node /app/package*.json ./
 COPY --from=builder --chown=node:node /app/node_modules ./node_modules

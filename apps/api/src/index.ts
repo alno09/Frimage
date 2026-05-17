@@ -17,6 +17,9 @@ const conversionsDir = `${storageDir}/conversions`;
 const maxUploadMb = Number(process.env.MAX_UPLOAD_MB ?? 25);
 const corsOrigin = process.env.CORS_ORIGIN;
 const imageDensity = process.env.IMAGE_DENSITY ?? "150";
+const imageMagickCommand = process.env.IMAGEMAGICK_COMMAND ?? "convert";
+const publicApiUrl = process.env.PUBLIC_API_URL?.replace(/\/+$/, "");
+const conversionPipelineVersion = "2026-05-17-density-before-input";
 
 // Ensure directories exist
 fs.mkdirSync(uploadDir, { recursive: true });
@@ -44,11 +47,19 @@ function generateConversionId(): string {
   return crypto.randomBytes(8).toString("hex");
 }
 
+function apiAssetUrl(pathname: string): string {
+  return publicApiUrl ? `${publicApiUrl}${pathname}` : pathname;
+}
+
+async function runImageMagick(args: string[]): Promise<void> {
+  console.log("ImageMagick command:", imageMagickCommand, args.join(" "));
+  await execFileAsync(imageMagickCommand, args);
+}
+
 // Utility function to convert file with ImageMagick
 async function convertFile(
   inputPath: string,
   conversionId: string,
-  originalFileName: string
 ): Promise<{
   previewPath: string;
   outputPngPath: string;
@@ -63,15 +74,15 @@ async function convertFile(
 
   try {
     // Convert to PNG (using first page [0] for multi-page formats)
-    await execFileAsync("magick", [
-      `${inputPath}[0]`,
+    await runImageMagick([
       "-density", imageDensity,
+      `${inputPath}[0]`,
       "-alpha", "on",
       outputPngPath,
     ]);
 
     // Create preview (smaller version)
-    await execFileAsync("magick", [
+    await runImageMagick([
       `${outputPngPath}[0]`,
       "-resize", "1200x1200>",
       "-quality", "85",
@@ -79,7 +90,7 @@ async function convertFile(
     ]);
 
     // Convert to JPG
-    await execFileAsync("magick", [
+    await runImageMagick([
       `${outputPngPath}[0]`,
       "-quality", "90",
       "-alpha", "remove",
@@ -106,6 +117,7 @@ async function convertFile(
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
+    conversionPipelineVersion,
   });
 });
 
@@ -127,8 +139,7 @@ app.post(
       // Convert file synchronously
       const { previewPath, outputPngPath, outputJpgPath } = await convertFile(
         req.file.path,
-        conversionId,
-        req.file.originalname
+        conversionId
       );
 
       const processingTimeMs = Date.now() - startTime;
@@ -147,10 +158,10 @@ app.post(
       return res.json({
         success: true,
         conversionId,
-        previewUrl: `/api/preview/${conversionId}/preview.png`,
+        previewUrl: apiAssetUrl(`/api/preview/${conversionId}/preview.png`),
         downloadUrls: {
-          png: `/api/download/${conversionId}/output.png`,
-          jpg: `/api/download/${conversionId}/output.jpg`,
+          png: apiAssetUrl(`/api/download/${conversionId}/output.png`),
+          jpg: apiAssetUrl(`/api/download/${conversionId}/output.jpg`),
         },
         metadata: {
           originalFileName: req.file.originalname,
@@ -220,6 +231,7 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
 
 const server = app.listen(port, () => {
   console.log(`Frimage API running on :${port}`);
+  console.log(`Conversion pipeline: ${conversionPipelineVersion}`);
 });
 
 async function shutdown() {

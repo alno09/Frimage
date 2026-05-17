@@ -27,6 +27,25 @@ interface ConversionResult {
   };
 }
 
+function apiAssetUrl(url: string): string {
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    return url;
+  }
+
+  return `${apiUrl}${url.startsWith("/") ? "" : "/"}${url}`;
+}
+
+function normalizeConversionResult(result: ConversionResult): ConversionResult {
+  return {
+    ...result,
+    previewUrl: apiAssetUrl(result.previewUrl),
+    downloadUrls: {
+      png: apiAssetUrl(result.downloadUrls.png),
+      jpg: apiAssetUrl(result.downloadUrls.jpg),
+    },
+  };
+}
+
 export default function Home() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -40,13 +59,6 @@ export default function Home() {
     const conversionId = params.get("conversionId");
 
     if (conversionId) {
-      // Reconstruct result from URL
-      const previewUrl = `/api/preview/${conversionId}/preview.png`;
-      const downloadUrls = {
-        png: `/api/download/${conversionId}/output.png`,
-        jpg: `/api/download/${conversionId}/output.jpg`,
-      };
-
       // Try to fetch metadata to restore full result
       fetchMetadata(conversionId);
     }
@@ -62,7 +74,7 @@ export default function Home() {
         jpg: `/api/download/${conversionId}/output.jpg`,
       };
 
-      setResult({
+      setResult(normalizeConversionResult({
         conversionId,
         previewUrl,
         downloadUrls,
@@ -78,7 +90,7 @@ export default function Home() {
             jpg: 0,
           },
         },
-      });
+      }));
       setUiState("success");
     } catch (err) {
       console.error("Failed to fetch metadata:", err);
@@ -124,7 +136,7 @@ export default function Home() {
       // Update URL with conversion ID so user can bookmark/refresh
       window.history.replaceState(null, "", `?conversionId=${data.conversionId}`);
 
-      setResult(data);
+      setResult(normalizeConversionResult(data));
       setUiState("success");
       setFile(null);
       if (inputRef.current) {

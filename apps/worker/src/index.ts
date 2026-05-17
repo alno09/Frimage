@@ -8,6 +8,7 @@ const redisPort = Number(process.env.REDIS_PORT ?? 6379);
 const storageDir = process.env.STORAGE_DIR ?? "/storage";
 const outputDir = `${storageDir}/outputs`;
 const density = process.env.IMAGE_DENSITY ?? "150";
+const imageMagickCommand = process.env.IMAGEMAGICK_COMMAND ?? "magick";
 
 fs.mkdirSync(outputDir, { recursive: true });
 
@@ -23,7 +24,7 @@ const worker = new Worker(
     console.log("Converting:", input);
 
     return new Promise((resolve, reject) => {
-      execFile("magick", [input + "[0]", "-density", density, "-alpha", "on", output], (err, stdout, stderr) => {
+      execFile(imageMagickCommand, ["-density", density, input + "[0]", "-alpha", "on", output], (err, stdout, stderr) => {
         if (err) {
           console.error(stderr);
           reject(err);
