@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { DragEvent, FormEvent } from "react";
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 type UiState = "idle" | "processing" | "success" | "error";
 
@@ -27,12 +28,56 @@ interface ConversionResult {
   };
 }
 
-function apiAssetUrl(url: string): string {
-  if (url.startsWith("http://") || url.startsWith("https://")) {
-    return url;
+function isLocalApiUrl(url: URL): boolean {
+  return url.hostname === "localhost" || url.hostname === "127.0.0.1";
+}
+
+function shouldUseSameOriginApi(url?: URL): boolean {
+  if (typeof window === "undefined") {
+    return false;
   }
 
-  return `${apiUrl}${url.startsWith("/") ? "" : "/"}${url}`;
+  const pageHost = window.location.hostname;
+  const pageIsLocal = pageHost === "localhost" || pageHost === "127.0.0.1";
+
+  return !url || (isLocalApiUrl(url) && !pageIsLocal);
+}
+
+function configuredApiBase(): URL | undefined {
+  if (!configuredApiUrl) {
+    return undefined;
+  }
+
+  try {
+    return new URL(configuredApiUrl);
+  } catch {
+    return undefined;
+  }
+}
+
+function apiRequestUrl(pathname: string): string {
+  const normalizedPath = pathname.startsWith("/") ? pathname : `/${pathname}`;
+  const apiBase = configuredApiBase();
+
+  if (shouldUseSameOriginApi(apiBase)) {
+    return normalizedPath;
+  }
+
+  return apiBase ? new URL(normalizedPath, apiBase).toString() : normalizedPath;
+}
+
+function apiAssetUrl(url: string): string {
+  try {
+    const parsedUrl = new URL(url);
+
+    if (shouldUseSameOriginApi(parsedUrl)) {
+      return `${parsedUrl.pathname}${parsedUrl.search}`;
+    }
+
+    return parsedUrl.toString();
+  } catch {
+    return apiRequestUrl(url);
+  }
 }
 
 function normalizeConversionResult(result: ConversionResult): ConversionResult {
@@ -48,7 +93,9 @@ function normalizeConversionResult(result: ConversionResult): ConversionResult {
 
 export default function Home() {
   const inputRef = useRef<HTMLInputElement>(null);
+  const dragDepthRef = useRef(0);
   const [file, setFile] = useState<File | null>(null);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [uiState, setUiState] = useState<UiState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [result, setResult] = useState<ConversionResult | null>(null);
@@ -105,6 +152,43 @@ export default function Home() {
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
   }
 
+  function selectFile(selectedFile: File | null) {
+    setFile(selectedFile);
+    setErrorMessage(null);
+  }
+
+  function handleDragEnter(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    dragDepthRef.current += 1;
+    setIsDraggingFile(true);
+  }
+
+  function handleDragOver(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "copy";
+  }
+
+  function handleDragLeave(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+
+    if (dragDepthRef.current === 0) {
+      setIsDraggingFile(false);
+    }
+  }
+
+  function handleDrop(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    dragDepthRef.current = 0;
+    setIsDraggingFile(false);
+
+    selectFile(event.dataTransfer.files.item(0));
+  }
+
   async function handleUpload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -122,7 +206,7 @@ export default function Home() {
     formData.append("file", file);
 
     try {
-      const res = await fetch(`${apiUrl}/upload`, {
+      const res = await fetch(apiRequestUrl("/upload"), {
         method: "POST",
         body: formData,
       });
@@ -153,6 +237,7 @@ export default function Home() {
   function handleConvertAnother() {
     setUiState("idle");
     setFile(null);
+    setIsDraggingFile(false);
     setResult(null);
     setErrorMessage(null);
     window.history.replaceState(null, "", window.location.pathname);
@@ -207,13 +292,23 @@ export default function Home() {
           >
             <label
               htmlFor="file-upload"
-              className="group flex min-h-56 cursor-pointer flex-col items-center justify-center rounded-[8px] border border-dashed border-[#cbbda9] bg-[#fbfaf7] px-5 py-10 text-center transition hover:border-[#2f7d74] hover:bg-[#f2faf7]"
+              onDragEnter={handleDragEnter}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`group flex min-h-56 cursor-pointer flex-col items-center justify-center rounded-[8px] border border-dashed px-5 py-10 text-center transition ${
+                isDraggingFile
+                  ? "border-[#2f7d74] bg-[#eefaf7] shadow-[inset_0_0_0_1px_rgba(47,125,116,0.35)]"
+                  : "border-[#cbbda9] bg-[#fbfaf7] hover:border-[#2f7d74] hover:bg-[#f2faf7]"
+              }`}
             >
-              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#21302e] text-xl font-semibold text-white">
+              <span className={`flex h-12 w-12 items-center justify-center rounded-full text-xl font-semibold text-white transition ${
+                isDraggingFile ? "bg-[#2f7d74]" : "bg-[#21302e]"
+              }`}>
                 +
               </span>
               <span className="mt-5 text-lg font-semibold text-[#171717]">
-                {file ? file.name : "Drop your design file here"}
+                {isDraggingFile ? "Drop to add this file" : file ? file.name : "Drop your design file here"}
               </span>
               <span className="mt-2 max-w-md text-sm leading-6 text-[#6f695f]">
                 {file
@@ -228,8 +323,7 @@ export default function Home() {
               type="file"
               className="sr-only"
               onChange={(event) => {
-                setFile(event.target.files?.[0] ?? null);
-                setErrorMessage(null);
+                selectFile(event.target.files?.[0] ?? null);
               }}
             />
 

@@ -13,6 +13,10 @@ const nextConfig = {
         source: "/api/download/:path*",
         destination: `${apiUrl}/api/download/:path*`,
       },
+      {
+        source: "/upload",
+        destination: `${apiUrl}/upload`,
+      },
     ];
   },
 };

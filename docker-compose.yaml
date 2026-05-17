@@ -8,7 +8,7 @@ services:
       STORAGE_DIR: /storage
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-25}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:3001}
-      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:4001}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-}
     ports:
       - "${API_PORT:-4001}:4000"
     volumes:
@@ -23,11 +23,11 @@ services:
     build:
       context: ./apps/web
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4001}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4001}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
       API_INTERNAL_URL: http://api:4000
     ports:
       - "${WEB_PORT:-3001}:3000"
