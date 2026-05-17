@@ -1,24 +1,10 @@
 services:
-  redis:
-    image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "yes"]
-    restart: unless-stopped
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-
   api:
     build: ./apps/api
     restart: unless-stopped
     environment:
       NODE_ENV: production
       PORT: 4000
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
       STORAGE_DIR: /storage
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-25}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:3001}
@@ -26,29 +12,11 @@ services:
       - "${API_PORT:-4001}:4000"
     volumes:
       - storage_data:/storage
-    depends_on:
-      redis:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 3s
       retries: 5
-
-  worker:
-    build: ./apps/worker
-    restart: unless-stopped
-    environment:
-      NODE_ENV: production
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      STORAGE_DIR: /storage
-      IMAGE_DENSITY: ${IMAGE_DENSITY:-150}
-    volumes:
-      - storage_data:/storage
-    depends_on:
-      redis:
-        condition: service_healthy
 
   web:
     build:
@@ -71,5 +39,4 @@ services:
       retries: 5
 
 volumes:
-  redis_data:
   storage_data:
